@@ -1,0 +1,33 @@
+oc login $URL_OCP_HOME
+
+
+
+#create TLS 
+
+kubectl create -f gateway-customer.yml
+
+kubectl create -f authentication-enable-tls.yml
+kubectl create -f destination-rule-tls.yml
+
+kubectl delete -f authentication-enable-tls.yml
+kubectl delete -f destination-rule-tls.yml
+
+
+
+export INGRESS_PORT=$(oc -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
+export INGRESS_HOST=$OCP_MASTER
+export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
+
+
+# RHS into pod 
+CUSTOMER_POD=$(oc get pod | grep cust | awk '{ print $1}' ) 
+
+oc exec -it $CUSTOMER_POD -c istio-proxy /bin/bash
+
+ifconfig
+sudo tcpdump -vvvv -A -i eth0 '((dst port 8080) and (net 10.1.8.14))'
+
+curl http://${GATEWAY_URL}/
+
+
+oc expose service customer

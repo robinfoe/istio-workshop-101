@@ -1,0 +1,18 @@
+export OCP_MASTER=master.dbs-483c.openshiftworkshop.com
+#export OCP_MASTER=master.dbs-dc1f.openshiftworkshop.com
+
+
+export ISTIO_HOME=/Users/rfoe/workspace/tools/istio-1.1.1
+export PATH=$ISTIO_HOME/bin:$PATH
+
+export WORKSPACE=/Users/rfoe/workspace/material/istio-demo/dbs-istio/istiorun
+
+export URL_OCP_HOME=https://$OCP_MASTER
+
+oc login $URL_OCP_HOME -u opentlc-mgr -p r3dh4t1!
+
+export URL_OCP_REGISTRY=$( oc get route docker-registry -n default --template='{{ .spec.host }}' ):443
+export URL_CUSTOMER=http://$( oc get route customer -n $PROJ_DBS_ISTIO --template='{{ .spec.host }}' )
+
+export PROJ_ISTIO=istio-system
+export PROJ_DBS_ISTIO=dbs-demo

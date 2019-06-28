@@ -1,0 +1,28 @@
+# get into recommendation V2 pods
+
+Routing
+
+
+
+kubectl create -f <(istioctl kube-inject -f ./recommendation/kubernetes/Deployment-v2.yml) -n $PROJ_DBS_ISTIO
+
+
+
+
+
+#oc apply -f <(istioctl kube-inject -f deployment-v2.yml) -n tutorial
+
+kubectl create -f destination-rule-recommendation-v1-v2.yml -n tutorial
+kubectl create -f virtual-service-recommendation-v2.yml -n tutorial
+kubectl replace -f virtual-service-recommendation-v1.yml -n tutorial
+
+kubectl replace -f virtual-service-recommendation-v1-v2-unbalance.yml -n tutorial
+
+Circuit Breaker 
+curl localhost:8080/misbehave
+
+
+curl  -H "Authorization: Bearer $token" -A "finance" $URL_CUSTOMER
+
+
+

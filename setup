@@ -1,0 +1,100 @@
+#INSTALL ISTIO in OCP
+
+
+export PROJ_ISTIO=istio-system
+export PROJ_DBS_ISTIO=dbs-demo
+
+
+
+## enable Any UID
+oc adm policy add-scc-to-user anyuid -z istio-ingress-service-account -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z default -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z prometheus -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z istio-egressgateway-service-account -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z istio-citadel-service-account -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z istio-ingressgateway-service-account -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z istio-cleanup-old-ca-service-account -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z istio-mixer-post-install-account -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z istio-mixer-service-account -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z istio-pilot-service-account -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z istio-sidecar-injector-service-account -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z istio-galley-service-account -n $PROJ_ISTIO
+oc adm policy add-scc-to-user anyuid -z istio-security-post-install-account -n $PROJ_ISTIO
+
+
+
+## proceed with installation
+cd $ISTIO_HOME
+oc apply -f install/kubernetes/helm/istio-init/files/crd-11.yaml
+oc apply -f install/kubernetes/istio-demo.yaml
+
+oc project $PROJ_ISTIO
+
+oc expose svc istio-ingressgateway --port=80
+oc expose svc grafana
+oc expose svc prometheus
+oc expose svc tracing
+oc expose service kiali --path=/kiali
+oc adm policy add-cluster-role-to-user admin system:serviceaccount:istio-system:kiali-service-account -z default
+
+
+
+cd $WORKSPACE
+oc new-project $PROJ_DBS_ISTIO
+
+
+oc policy add-role-to-user system:image-builder system:serviceaccount:$PROJ_DBS_ISTIO:deployer
+oc policy add-role-to-user edit system:serviceaccount:$PROJ_DBS_ISTIO:deployer
+
+## login to docker with your deployer token 
+# remember to set insecure registry
+docker login $URL_OCP_REGISTRY --username=deployer 
+
+#Upload and tag images 
+docker tag fe4775099919 $URL_OCP_REGISTRY/$PROJ_DBS_ISTIO/customer:v1
+docker tag 92defade56c2 $URL_OCP_REGISTRY/$PROJ_DBS_ISTIO/preference:v1
+docker tag 59998abc25df $URL_OCP_REGISTRY/$PROJ_DBS_ISTIO/recommendation:v1
+docker tag 46f52c97bfcf $URL_OCP_REGISTRY/$PROJ_DBS_ISTIO/recommendation:v2
+
+
+docker push $URL_OCP_REGISTRY/$PROJ_DBS_ISTIO/customer:v1
+docker push $URL_OCP_REGISTRY/$PROJ_DBS_ISTIO/preference:v1
+docker push $URL_OCP_REGISTRY/$PROJ_DBS_ISTIO/recommendation:v1
+docker push $URL_OCP_REGISTRY/$PROJ_DBS_ISTIO/recommendation:v2
+
+
+
+
+oc adm policy add-scc-to-user privileged -z default -n $PROJ_DBS_ISTIO
+oc adm policy add-scc-to-user privileged -z opentlc-mgr -n $PROJ_DBS_ISTIO
+oc adm policy add-scc-to-user privileged -z istio.builder -n $PROJ_DBS_ISTIO
+oc adm policy add-scc-to-user privileged -z istio.default -n $PROJ_DBS_ISTIO
+oc adm policy add-scc-to-user privileged -z istio.deployer -n $PROJ_DBS_ISTIO
+
+oc adm policy add-scc-to-user privileged system:serviceaccount:$PROJ_DBS_ISTIO:default
+oc adm policy add-scc-to-user privileged system:serviceaccount:$PROJ_DBS_ISTIO:opentlc-mgr
+oc adm policy add-scc-to-user privileged system:serviceaccount:$PROJ_DBS_ISTIO:builder
+oc adm policy add-scc-to-user privileged system:serviceaccount:$PROJ_DBS_ISTIO:deployer
+
+cd $WORKSPACE/apps
+
+
+## remember 
+privileged: true
+
+kubectl create -f <(istioctl kube-inject -f ./customer/kubernetes/Deployment.yml) -n $PROJ_DBS_ISTIO
+kubectl create -f ./customer/kubernetes/Service.yml -n $PROJ_DBS_ISTIO
+oc expose svc/customer
+
+
+kubectl create -f <(istioctl kube-inject -f ./preference/kubernetes/Deployment.yml) -n $PROJ_DBS_ISTIO
+kubectl create -f ./preference/kubernetes/Service.yml -n $PROJ_DBS_ISTIO
+
+kubectl create -f <(istioctl kube-inject -f ./recommendation/kubernetes/Deployment.yml) -n $PROJ_DBS_ISTIO
+kubectl create -f ./recommendation/kubernetes/Service.yml -n $PROJ_DBS_ISTIO
+
+kubectl create -f <(istioctl kube-inject -f ./recommendation/kubernetes/Deployment-v2.yml) -n $PROJ_DBS_ISTIO
+
+
+export URL_OCP_REGISTRY=$( oc get route docker-registry -n default --template='{{ .spec.host }}' ):443
+
